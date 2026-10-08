@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>smarTrash Receiver Console</title>
+<style>
+  :root {
+    --bg:       #0F1613;
+    --panel:    #1A211D;
+    --surface:  #2C3830;
+    --border:   #3A4840;
+    --ok:       #4CAF7A;
+    --ok-dim:   rgba(76,175,122,0.15);
+    --alert:    #E8544A;
+    --text:     #D6DDD9;
+    --muted:    #8EA89A;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0)
+             env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+  }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; height: 52px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .logo { font-family: var(--mono); font-size: 0.9rem; color: var(--ok); }
+  .logo span { color: var(--muted); font-size: 0.75rem; }
+
+  .container { max-width: 480px; margin: 0 auto; padding: 20px 16px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 0.72rem; color: var(--muted); margin-bottom: 12px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .field { margin-bottom: 14px; }
+  .field-label { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 5px; }
+  .field-row { display: flex; gap: 8px; }
+  .field-input {
+    flex: 1; font-family: var(--mono); font-size: 0.85rem;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px 10px; outline: none;
+  }
+  .field-input:focus { border-color: var(--ok); }
+  .field-input[readonly] { color: var(--muted); cursor: default; }
+
+  .btn {
+    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+    border: none; border-radius: 4px; padding: 9px 14px;
+    cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--ok); color: #0F1613; }
+  .btn-secondary {
+    background: transparent; color: var(--ok);
+    border: 1px solid var(--ok);
+  }
+  .btn-full { width: 100%; padding: 12px; margin-top: 4px; }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; color: var(--muted);
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .status-dot.connected { background: var(--ok); }
+  .status-dot.connecting { background: #FFB347; }
+
+  .save-state {
+    font-size: 0.72rem; color: var(--ok); height: 16px;
+    opacity: 0; transition: opacity 0.2s; margin-top: 4px;
+  }
+  .save-state.show { opacity: 1; }
+
+  .info-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .label { color: var(--muted); }
+  .info-row .value { font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">smarTrash <span>Receiver Console</span></div>
+</header>
+
+<div class="container">
+
+  <!-- Connection -->
+  <div class="card">
+    <div class="card-title">Connection</div>
+    <div class="status" id="status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Disconnected</span>
+    </div>
+    <button class="btn btn-primary btn-full" id="connect-btn"
+            onclick="toggleConnect()" style="margin-top:12px">
+      Connect to Receiver
+    </button>
+  </div>
+
+  <!-- Device info -->
+  <div class="card" id="info-card" style="display:none">
+    <div class="card-title">Device</div>
+    <div class="info-row">
+      <span class="label">MAC / ID</span>
+      <span class="value" id="info-mac">—</span>
+    </div>
+  </div>
+
+  <!-- GPS configuration -->
+  <div class="card" id="gps-card" style="display:none">
+    <div class="card-title">Receiver GPS Location</div>
+    <div class="field">
+      <label class="field-label">Latitude</label>
+      <div class="field-row">
+        <input class="field-input" type="text" id="in-lat"
+               inputmode="decimal" placeholder="47.301234">
+        <button class="btn btn-secondary" onclick="saveLat()">Save</button>
+      </div>
+      <div class="save-state" id="save-lat-msg">Saved ✓</div>
+    </div>
+    <div class="field">
+      <label class="field-label">Longitude</label>
+      <div class="field-row">
+        <input class="field-input" type="text" id="in-lon"
+               inputmode="decimal" placeholder="8.566789">
+        <button class="btn btn-secondary" onclick="saveLon()">Save</button>
+      </div>
+      <div class="save-state" id="save-lon-msg">Saved ✓</div>
+    </div>
+    <button class="btn btn-secondary btn-full" onclick="useMyLocation()">
+      📍 Use my current location
+    </button>
+  </div>
+
+</div>
+
+<script>
+const SERVICE_UUID = '19b20000-e8f2-537e-4f6c-d104768a1214';
+const LAT_UUID     = '19b20001-e8f2-537e-4f6c-d104768a1214';
+const LON_UUID     = '19b20002-e8f2-537e-4f6c-d104768a1214';
+const MACID_UUID   = '19b20003-e8f2-537e-4f6c-d104768a1214';
+
+let device = null, server = null, service = null;
+let latChar = null, lonChar = null, macChar = null;
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+function setStatus(text, state) { // state: 'connected'|'connecting'|''
+  document.getElementById('status-text').textContent = text;
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot' + (state ? ' ' + state : '');
+}
+
+function showCards(show) {
+  ['info-card','gps-card'].forEach(id => {
+    document.getElementById(id).style.display = show ? 'block' : 'none';
+  });
+}
+
+async function toggleConnect() {
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+    return;
+  }
+  try {
+    setStatus('Scanning…', 'connecting');
+    document.getElementById('connect-btn').disabled = true;
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'smarTrash-RX' }],
+      optionalServices: [SERVICE_UUID],
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnect);
+    setStatus('Connecting…', 'connecting');
+    server  = await device.gatt.connect();
+    service = await server.getPrimaryService(SERVICE_UUID);
+    macChar = await service.getCharacteristic(MACID_UUID);
+    latChar = await service.getCharacteristic(LAT_UUID);
+    lonChar = await service.getCharacteristic(LON_UUID);
+
+    const macVal = await macChar.readValue();
+    document.getElementById('info-mac').textContent = dec.decode(macVal);
+
+    const latVal = await latChar.readValue();
+    document.getElementById('in-lat').value = dec.decode(latVal).trim();
+    const lonVal = await lonChar.readValue();
+    document.getElementById('in-lon').value = dec.decode(lonVal).trim();
+
+    setStatus('Connected to ' + device.name, 'connected');
+    document.getElementById('connect-btn').textContent = 'Disconnect';
+    document.getElementById('connect-btn').disabled = false;
+    showCards(true);
+  } catch (e) {
+    setStatus('Error: ' + e.message, '');
+    document.getElementById('connect-btn').disabled = false;
+    showCards(false);
+  }
+}
+
+function onDisconnect() {
+  setStatus('Disconnected', '');
+  document.getElementById('connect-btn').textContent = 'Connect to Receiver';
+  document.getElementById('connect-btn').disabled = false;
+  showCards(false);
+}
+
+async function saveChar(char, value, msgId) {
+  if (!char) return;
+  try {
+    await char.writeValue(enc.encode(value));
+    const msg = document.getElementById(msgId);
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 1800);
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+  }
+}
+
+function saveLat() { saveChar(latChar, document.getElementById('in-lat').value, 'save-lat-msg'); }
+function saveLon() { saveChar(lonChar, document.getElementById('in-lon').value, 'save-lon-msg'); }
+
+function useMyLocation() {
+  if (!navigator.geolocation) { alert('Geolocation not available.'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude.toFixed(6);
+    const lon = pos.coords.longitude.toFixed(6);
+    document.getElementById('in-lat').value = lat;
+    document.getElementById('in-lon').value = lon;
+    saveLat();
+    setTimeout(saveLon, 300);
+  }, err => {
+    alert('Location error: ' + err.message + '\nMake sure you\'re on HTTPS.');
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+</script>
+</body>
+</html>
